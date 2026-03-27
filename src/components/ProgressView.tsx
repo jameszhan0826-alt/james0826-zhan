@@ -1,26 +1,45 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { WordProgress } from '../types';
-import { Trophy, TrendingUp, AlertCircle, Search, CheckCircle2, Download, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
+import { VocabItem, WordProgress, PracticeSession } from '../types';
+import { Trophy, TrendingUp, AlertCircle, Search, CheckCircle2, Download, Loader2, ChevronUp, ChevronDown, RefreshCw, BarChart3, Calendar, Zap } from 'lucide-react';
 import { printToPDF } from '../utils/pdf';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface ProgressViewProps {
   wordProgress: Record<string, WordProgress>;
+  vocabList: VocabItem[];
+  savedSessions: PracticeSession[];
+  onRegenerate: (words: VocabItem[], title?: string) => void;
+  onQuickReview?: (words: VocabItem[], title?: string) => void;
+  isGenerating?: boolean;
+  students?: string[];
 }
 
 type SortColumn = 'word' | 'meaning' | 'accuracy' | 'attempts' | 'status' | 'lastAttempted';
 
-export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
+export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress, vocabList, savedSessions, onRegenerate, onQuickReview, isGenerating, students }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDownloading, setIsDownloading] = useState(false);
   const [sortColumn, setSortColumn] = useState<SortColumn>('lastAttempted');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   
-  const words = Object.values(wordProgress);
+  const words = Object.values(wordProgress) as WordProgress[];
   
-  const masteredWords = words.filter(w => w.attempts >= 3 && (w.correct / w.attempts) >= 0.8);
-  const learningWords = words.filter(w => w.attempts > 0 && !masteredWords.includes(w));
-  const needsImprovement = words.filter(w => w.attempts >= 3 && (w.correct / w.attempts) < 0.5);
+  const masteredWords = words.filter((w: WordProgress) => w.attempts >= 3 && (w.correct / w.attempts) >= 0.8);
+  const needsImprovement = words.filter((w: WordProgress) => w.attempts >= 3 && (w.correct / w.attempts) < 0.5);
+  const learningWords = words.filter((w: WordProgress) => w.attempts > 0 && !masteredWords.includes(w) && !needsImprovement.includes(w));
+
+  const getVocabItems = (progressList: WordProgress[]) => {
+    return progressList.map(p => {
+      const existing = vocabList.find(v => v.word.toLowerCase() === p.word.toLowerCase());
+      if (existing) return existing;
+      return {
+        id: crypto.randomUUID(),
+        word: p.word,
+        meaning: p.meaning
+      } as VocabItem;
+    });
+  };
 
   const getAccuracy = (w: WordProgress) => w.attempts > 0 ? Math.round((w.correct / w.attempts) * 100) : 0;
   const getStatusScore = (w: WordProgress) => {
@@ -31,7 +50,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
   };
 
   const filteredWords = words
-    .filter(w => 
+    .filter((w: WordProgress) => 
       w.word.toLowerCase().includes(searchTerm.toLowerCase()) || 
       w.meaning.toLowerCase().includes(searchTerm.toLowerCase())
     )
@@ -70,6 +89,24 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
     }
   };
 
+  // Prepare chart data
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return d.toISOString().split('T')[0];
+  }).reverse();
+
+  const chartData = last7Days.map(date => {
+    const sessionsOnDate = savedSessions.filter(s => s.lastAttempted && new Date(s.lastAttempted).toISOString().split('T')[0] === date);
+    return {
+      date: new Date(date).toLocaleDateString(undefined, { weekday: 'short' }),
+      count: sessionsOnDate.length,
+      fullDate: date
+    };
+  });
+
+  const totalPractices = savedSessions.reduce((acc, s) => acc + (s.lastAttempted ? 1 : 0), 0);
+
   const SortIcon = ({ column }: { column: SortColumn }) => {
     if (sortColumn !== column) return <div className="w-4 h-4 inline-block opacity-0 group-hover:opacity-50 transition-opacity"><ChevronDown size={16} /></div>;
     return sortDirection === 'asc' ? <ChevronUp size={16} className="inline-block text-indigo-600" /> : <ChevronDown size={16} className="inline-block text-indigo-600" />;
@@ -87,15 +124,15 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
         <div style="display: flex; justify-content: space-around; margin-bottom: 40px; text-align: center; background: #f8fafc; padding: 20px; border-radius: 12px; border: 1px solid #e2e8f0;">
           <div>
             <h2 style="color: #059669; margin: 0; font-size: 32px;">${masteredWords.length}</h2>
-            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">🌟 Super Stars</p>
+            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">🌟 Star Achiever (Mastered)</p>
           </div>
           <div>
             <h2 style="color: #4f46e5; margin: 0; font-size: 32px;">${learningWords.length}</h2>
-            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">🧠 Brain Growing</p>
+            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">🌱 Growing Sprout (Getting There)</p>
           </div>
           <div>
             <h2 style="color: #d97706; margin: 0; font-size: 32px;">${needsImprovement.length}</h2>
-            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">💪 Power Up Needed</p>
+            <p style="margin: 5px 0 0 0; color: #475569; font-weight: bold;">💪 Extra Practice (Needs Review)</p>
           </div>
         </div>
 
@@ -111,7 +148,7 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
             </tr>
           </thead>
           <tbody>
-            ${words.sort((a, b) => b.lastAttempted - a.lastAttempted).map(w => {
+            ${(words as WordProgress[]).sort((a, b) => b.lastAttempted - a.lastAttempted).map((w: WordProgress) => {
               const accuracy = w.attempts > 0 ? Math.round((w.correct / w.attempts) * 100) : 0;
               const isMastered = w.attempts >= 3 && accuracy >= 80;
               const isStruggling = w.attempts >= 3 && accuracy < 50;
@@ -139,34 +176,180 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-emerald-200 flex items-center gap-4 transform transition-transform hover:scale-105">
-          <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
-            <Trophy size={28} />
+      {students && students.length > 0 && (
+        <div className="p-6 bg-white rounded-3xl border border-slate-200 shadow-sm">
+          <h3 className="text-xl font-bold text-slate-800 mb-2">Students</h3>
+          <p className="text-slate-600 text-lg">{students.join(', ')}</p>
+        </div>
+      )}
+      
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-emerald-200 flex flex-col gap-4 transform transition-all hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <Trophy size={28} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-emerald-600 uppercase tracking-wider">🌟 Star Achiever (Mastered)</p>
+                <p className="text-3xl font-black text-slate-800">{masteredWords.length}</p>
+              </div>
+            </div>
+            {masteredWords.length > 0 && (
+              <div className="flex gap-2">
+                {onQuickReview && (
+                  <button 
+                    onClick={() => onQuickReview(getVocabItems(masteredWords), 'Quick Mastery Review')} 
+                    className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors shrink-0" 
+                    title="Quick Review (Instant)"
+                  >
+                    <Zap size={20} />
+                  </button>
+                )}
+                <button 
+                  onClick={() => onRegenerate(getVocabItems(masteredWords), 'Mastery Review')} 
+                  disabled={isGenerating}
+                  className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-colors shrink-0 disabled:opacity-50" 
+                  title="AI Quest (Better)"
+                >
+                  {isGenerating ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
+                </button>
+              </div>
+            )}
           </div>
-          <div>
-            <p className="text-sm font-bold text-emerald-600 uppercase tracking-wider">🌟 Super Stars</p>
-            <p className="text-3xl font-black text-slate-800">{masteredWords.length}</p>
-          </div>
+          {masteredWords.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-emerald-200">
+              {masteredWords.map((w, idx) => (
+                <span key={idx} className="px-2 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded-lg border border-emerald-100">
+                  {w.word}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         
-        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-indigo-200 flex items-center gap-4 transform transition-transform hover:scale-105">
-          <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
-            <TrendingUp size={28} />
+        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-indigo-200 flex flex-col gap-4 transform transition-all hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <TrendingUp size={28} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-indigo-600 uppercase tracking-wider">🌱 Growing Sprout (Getting There)</p>
+                <p className="text-3xl font-black text-slate-800">{learningWords.length}</p>
+              </div>
+            </div>
+            {learningWords.length > 0 && (
+              <div className="flex gap-2">
+                {onQuickReview && (
+                  <button 
+                    onClick={() => onQuickReview(getVocabItems(learningWords), 'Quick Learning Practice')} 
+                    className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors shrink-0" 
+                    title="Quick Review (Instant)"
+                  >
+                    <Zap size={20} />
+                  </button>
+                )}
+                <button 
+                  onClick={() => onRegenerate(getVocabItems(learningWords), 'Learning Practice')} 
+                  disabled={isGenerating}
+                  className="p-3 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors shrink-0 disabled:opacity-50" 
+                  title="AI Quest (Better)"
+                >
+                  {isGenerating ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
+                </button>
+              </div>
+            )}
           </div>
-          <div>
-            <p className="text-sm font-bold text-indigo-600 uppercase tracking-wider">🧠 Brain Growing</p>
-            <p className="text-3xl font-black text-slate-800">{learningWords.length}</p>
-          </div>
+          {learningWords.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-indigo-200">
+              {learningWords.map((w, idx) => (
+                <span key={idx} className="px-2 py-1 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded-lg border border-indigo-100">
+                  {w.word}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         
-        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-amber-200 flex items-center gap-4 transform transition-transform hover:scale-105">
-          <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-inner">
-            <AlertCircle size={28} />
+        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-amber-200 flex flex-col gap-4 transform transition-all hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center shadow-inner">
+                <AlertCircle size={28} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-amber-600 uppercase tracking-wider">💪 Extra Practice (Needs Review)</p>
+                <p className="text-3xl font-black text-slate-800">{needsImprovement.length}</p>
+              </div>
+            </div>
+            {needsImprovement.length > 0 && (
+              <div className="flex gap-2">
+                {onQuickReview && (
+                  <button 
+                    onClick={() => onQuickReview(getVocabItems(needsImprovement), 'Quick Review Practice')} 
+                    className="p-3 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors shrink-0" 
+                    title="Quick Review (Instant)"
+                  >
+                    <Zap size={20} />
+                  </button>
+                )}
+                <button 
+                  onClick={() => onRegenerate(getVocabItems(needsImprovement), 'Review Practice')} 
+                  disabled={isGenerating}
+                  className="p-3 bg-amber-50 text-amber-600 rounded-xl hover:bg-amber-100 transition-colors shrink-0 disabled:opacity-50" 
+                  title="AI Quest (Better)"
+                >
+                  {isGenerating ? <Loader2 size={20} className="animate-spin" /> : <RefreshCw size={20} />}
+                </button>
+              </div>
+            )}
           </div>
-          <div>
-            <p className="text-sm font-bold text-amber-600 uppercase tracking-wider">💪 Power Up Needed</p>
-            <p className="text-3xl font-black text-slate-800">{needsImprovement.length}</p>
+          {needsImprovement.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-amber-200">
+              {needsImprovement.map((w, idx) => (
+                <span key={idx} className="px-2 py-1 bg-amber-50 text-amber-700 text-[10px] font-bold rounded-lg border border-amber-100">
+                  {w.word}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-6 rounded-3xl shadow-sm border-2 border-slate-200 flex flex-col gap-4 transform transition-all hover:shadow-md">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center shadow-inner">
+              <BarChart3 size={28} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-600 uppercase tracking-wider">🎯 Total Quests</p>
+              <p className="text-3xl font-black text-slate-800">{totalPractices}</p>
+            </div>
+          </div>
+          <div className="h-24 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData}>
+                <Tooltip 
+                  cursor={{ fill: 'transparent' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-white p-2 border border-slate-200 rounded-lg shadow-sm text-[10px]">
+                          <p className="font-bold">{payload[0].payload.fullDate}</p>
+                          <p className="text-indigo-600">{payload[0].value} Quests</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.count > 0 ? '#4f46e5' : '#e2e8f0'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>
@@ -272,16 +455,66 @@ export const ProgressView: React.FC<ProgressViewProps> = ({ wordProgress }) => {
                       <td className="px-6 py-4">
                         {isMastered ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
-                            <CheckCircle2 size={12} /> Mastered
+                            <CheckCircle2 size={12} /> 🌟 Mastered
                           </span>
                         ) : isStruggling ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                            <AlertCircle size={12} /> Review
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                              <AlertCircle size={12} /> 💪 Needs Review
+                            </span>
+                            {onQuickReview && (
+                              <button 
+                                onClick={() => {
+                                  const vocabItem = vocabList.find(v => v.word === w.word);
+                                  if (vocabItem) onQuickReview([vocabItem], `Quick Review: ${w.word}`);
+                                }}
+                                className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors"
+                                title="Quick Review (Instant)"
+                              >
+                                <Zap size={14} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                const vocabItem = vocabList.find(v => v.word === w.word);
+                                if (vocabItem) onRegenerate([vocabItem], `Review: ${w.word}`);
+                              }}
+                              disabled={isGenerating}
+                              className="p-1.5 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+                              title="AI Quest (Better)"
+                            >
+                              {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                            </button>
+                          </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
-                            <TrendingUp size={12} /> Learning
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                              <TrendingUp size={12} /> 🌱 Getting There
+                            </span>
+                            {onQuickReview && (
+                              <button 
+                                onClick={() => {
+                                  const vocabItem = vocabList.find(v => v.word === w.word);
+                                  if (vocabItem) onQuickReview([vocabItem], `Quick Learning: ${w.word}`);
+                                }}
+                                className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+                                title="Quick Review (Instant)"
+                              >
+                                <Zap size={14} />
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => {
+                                const vocabItem = vocabList.find(v => v.word === w.word);
+                                if (vocabItem) onRegenerate([vocabItem], `Learning: ${w.word}`);
+                              }}
+                              disabled={isGenerating}
+                              className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors disabled:opacity-50"
+                              title="AI Quest (Better)"
+                            >
+                              {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                            </button>
+                          </div>
                         )}
                       </td>
                     </motion.tr>

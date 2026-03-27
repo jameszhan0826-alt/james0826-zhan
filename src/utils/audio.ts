@@ -5,6 +5,7 @@ let audioContext: AudioContext | null = null;
 export const playHighQualityAudio = async (text: string, lang: string = 'en-US'): Promise<void> => {
   if (!text || !text.trim()) return;
   
+  console.log('Generating audio for:', text);
   try {
     // Use different voices based on language if needed, but Kore is good for English
     const voiceName = lang === 'zh-CN' ? 'Puck' : 'Kore';

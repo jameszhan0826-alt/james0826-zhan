@@ -2,6 +2,9 @@ export interface VocabItem {
   id: string;
   word: string;
   meaning: string;
+  example?: string;
+  exampleTranslation?: string;
+  imageUrl?: string;
 }
 
 export interface SavedVocabList {
@@ -9,9 +12,10 @@ export interface SavedVocabList {
   title: string;
   words: VocabItem[];
   createdAt: number;
+  category?: 'NCE' | 'PET' | 'General' | 'MistakeBook';
 }
 
-export type QuestionType = 'multiple_choice' | 'fill_in_blank';
+export type QuestionType = 'multiple_choice' | 'fill_in_blank' | 'sentence_translation';
 
 export interface PracticeQuestion {
   id: string;
@@ -20,8 +24,12 @@ export interface PracticeQuestion {
   options: string[];
   correctAnswer: string;
   explanation: string;
+  memoryTip?: string;
   word?: string;
   meaning?: string;
+  example?: string;
+  exampleTranslation?: string;
+  imageUrl?: string;
 }
 
 export interface PracticeSession {
@@ -34,6 +42,15 @@ export interface PracticeSession {
   isMastered?: boolean;
   lastAttempted?: number;
   originalVocab?: VocabItem[];
+  wordsToReview?: string[];
+  category?: 'NCE' | 'PET' | 'General' | 'MistakeBook';
+}
+
+export interface AdvancedOptions {
+  customMemoryTips?: string;
+  supportGrammarExam?: boolean;
+  supportZhongkao?: boolean;
+  batchSize?: number;
 }
 
 export interface WordProgress {
@@ -42,4 +59,5 @@ export interface WordProgress {
   attempts: number;
   correct: number;
   lastAttempted: number;
+  isMastered?: boolean;
 }
